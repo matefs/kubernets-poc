@@ -1,0 +1,62 @@
+# Este arquivo não cria o cluster: ele é criado localmente pelo comando
+# `k3d cluster create hello-local` descrito no README. O k3d executa o K3s
+# em um contêiner Docker; o kubectl aplica os recursos abaixo nesse cluster.
+
+# ConfigMap: conteúdo da página disponibilizada pelo servidor HTTP.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-page
+data:
+  index.html: |
+    Hello, World!
+---
+# Deployment: mantém uma cópia do servidor HTTP BusyBox em execução.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - name: hello
+          image: busybox:1.36.1
+          imagePullPolicy: IfNotPresent
+          command: ["httpd", "-f", "-p", "8080", "-h", "/www"]
+          ports:
+            - containerPort: 8080
+          # Reserva pequena para agendamento; 8 MiB é o limite do contêiner.
+          resources:
+            requests:
+              cpu: 1m
+              memory: 2Mi
+            limits:
+              memory: 8Mi
+          volumeMounts:
+            - name: page
+              mountPath: /www
+              readOnly: true
+      volumes:
+        - name: page
+          configMap:
+            name: hello-page
+---
+# Service: endereço estável no cluster para acessar os pods selecionados.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+spec:
+  selector:
+    app: hello
+  ports:
+    - port: 8080
+      targetPort: 8080
